@@ -38,7 +38,10 @@ public class Product {
     
     // Business logic
     public boolean isInStock() {
-        return stockQuantity > 0;
+        if (stockQuantity > 0) {
+            return true;
+        }
+        throw new IllegalArgumentException("Not enough stock available");
     }
     
     public void decreaseStock(int quantity) {

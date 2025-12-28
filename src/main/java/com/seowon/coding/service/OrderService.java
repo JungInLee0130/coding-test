@@ -76,18 +76,24 @@ public class OrderService {
             Product product = productRepository.findById(productId)
                     .orElseThrow(() -> new IllegalStateException("제품이 존재하지않습니다."));
 
+            // 주문제품
             OrderItem orderItem = OrderItem.builder()
                     .order(order)
                     .product(product)
                     .quantity(quantity)
+                    .price(product.getPrice())
                     .build();
 
             order.addItem(orderItem);
 
-            product.decreaseStock(quantity);
+            // 여기서 도메인 예외처리 해야하기때문에 TODO : 4 에서 사용해도된다고 한것임.
+            if (product.isInStock()) {
+                product.decreaseStock(quantity);
+            }
         }
 
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        return savedOrder;
     }
 
     /**
