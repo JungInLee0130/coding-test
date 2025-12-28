@@ -77,12 +77,7 @@ public class OrderService {
                     .orElseThrow(() -> new IllegalStateException("제품이 존재하지않습니다."));
 
             // 주문제품
-            OrderItem orderItem = OrderItem.builder()
-                    .order(order)
-                    .product(product)
-                    .quantity(quantity)
-                    .price(product.getPrice())
-                    .build();
+            OrderItem orderItem = OrderItem.createOrderItem(order, product, quantity);
 
             order.addItem(orderItem);
 
@@ -107,38 +102,31 @@ public class OrderService {
                                String couponCode) {
         
         Order.validateCustomerInfo(customerName, customerEmail);
-        
-        // service 로직
-        if (orderProducts == null || orderProducts.isEmpty()) {
-            throw new IllegalArgumentException("orderReqs invalid");
-        }
+
+        OrderProduct.validateOrderProducts(orderProducts);
 
         // order 생성
         Order order = Order.createOrder(customerName, customerEmail);
 
         BigDecimal subtotal = BigDecimal.ZERO;
-
         for (OrderProduct req : orderProducts) {
-            Long pid = req.getProductId();
-            int qty = req.getQuantity();
+            Long productId = req.getProductId();
+            int quantity = req.getQuantity();
 
             // - Repository 조회는 도메인 객체 밖에서 해결하여 의존 차단 합니다.
-            Product product = productRepository.findById(pid)
+            Product product = productRepository.findById(productId)
                     .orElseThrow(() -> new IllegalArgumentException("Product not found: " + pid));
 
-            order.validateQuantity(qty, product.getStockQuantity(), pid);
+            order.validateQuantity(quantity, product.getStockQuantity(), productId);
 
-            OrderItem orderItem = OrderItem.createOrderItem(order, product, qty);
+            OrderItem orderItem = OrderItem.createOrderItem(order, product, quantity);
             order.getItems().add(orderItem);
 
-            product.decreaseStock(qty);
+            product.decreaseStock(quantity);
 
             // 소계 : 제품가격 * 수량
             subtotal.add(orderItem.getSubtotal());
         }
-
-        order.recalculateTotalAmount();
-
         // 총 금액 : +배송료 - 할인
         // 배송료
         BigDecimal shipping = order.calculateShipping(subtotal);
@@ -147,7 +135,7 @@ public class OrderService {
 
         order.setTotalAmount(subtotal, shipping, discount);
 
-        order.setStatus(Order.OrderStatus.PROCESSING);
+        order.markAsProcessing();
 
         return orderRepository.save(order);
     }
