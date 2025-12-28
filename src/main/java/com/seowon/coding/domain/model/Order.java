@@ -1,5 +1,6 @@
 package com.seowon.coding.domain.model;
 
+import com.seowon.coding.service.OrderProduct;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,6 +38,8 @@ public class Order {
     private List<OrderItem> items = new ArrayList<>();
     
     private BigDecimal totalAmount;
+
+
     
     // Business logic
     public void addItem(OrderItem item) {
@@ -75,5 +78,43 @@ public class Order {
     
     public enum OrderStatus {
         PENDING, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+    }
+
+    public static Order createOrder(String customerName, String customerEmail) {
+        return Order.builder()
+                .customerName(customerName)
+                .customerEmail(customerEmail)
+                .status(Order.OrderStatus.PENDING)
+                .orderDate(LocalDateTime.now())
+                .items(new ArrayList<>())
+                .totalAmount(BigDecimal.ZERO)
+                .build();
+    }
+
+    public static void validateCustomerInfo(String customerName, String customerEmail) {
+        if (customerName == null || customerEmail == null) {
+            throw new IllegalArgumentException("customer info required");
+        }
+    }
+
+
+    public void validateQuantity(Integer inputQuantity, Integer stockQuantity, Long productId) {
+        if (inputQuantity <= 0) {
+            throw new IllegalArgumentException("quantity must be positive: " + inputQuantity);
+        }
+        if (stockQuantity < inputQuantity) {
+            throw new IllegalStateException("insufficient stock for product " + productId);
+        }
+    }
+
+    public BigDecimal increaseSubtotal(BigDecimal subTotal) {
+        return this.totalAmount.add(subTotal);
+    }
+
+
+    public void setTotalAmount(BigDecimal subtotal,
+                               BigDecimal shipping,
+                               BigDecimal discount) {
+        this.totalAmount.add(subtotal).add(shipping).subtract(discount);
     }
 }

@@ -1,5 +1,6 @@
 package com.seowon.coding.service;
 
+import ch.qos.logback.core.spi.ErrorCodes;
 import com.seowon.coding.domain.model.Order;
 import com.seowon.coding.domain.model.OrderItem;
 import com.seowon.coding.domain.model.ProcessingStatus;
@@ -55,6 +56,7 @@ public class OrderService {
 
 
 
+    @Transactional
     public Order placeOrder(String customerName, String customerEmail, List<Long> productIds, List<Integer> quantities) {
         // TODO #3: 구현 항목
         // * 주어진 고객 정보로 새 Order를 생성
@@ -64,6 +66,29 @@ public class OrderService {
         // * order 를 저장
         // * 각 Product 의 재고를 수정
         // * placeOrder 메소드의 시그니처는 변경하지 않은 채 구현하세요.
+
+        Order order = Order.createOrder(customerName, customerEmail);
+
+        for (int i = 0; i < productIds.size(); i++) {
+            Long productId = productIds.get(i);
+            Integer quantity = quantities.get(i);
+
+            Product product = productRepository.findById(productId)
+                    .orElseThrow(() -> new IllegalStateException("제품이 존재하지않습니다."));
+
+            OrderItem orderItem = OrderItem.builder()
+                    .order(order)
+                    .product(product)
+                    .quantity(quantity)
+                    .build();
+
+            order.addItem(orderItem);
+
+            product.decreaseStock(quantity);
+        }
+
+        orderRepository.save(order);
+
         return null;
     }
 
@@ -76,53 +101,46 @@ public class OrderService {
                                String customerEmail,
                                List<OrderProduct> orderProducts,
                                String couponCode) {
-        if (customerName == null || customerEmail == null) {
-            throw new IllegalArgumentException("customer info required");
-        }
+        
+        Order.validateCustomerInfo(customerName, customerEmail);
+        
+        // service 로직
         if (orderProducts == null || orderProducts.isEmpty()) {
             throw new IllegalArgumentException("orderReqs invalid");
         }
 
-        Order order = Order.builder()
-                .customerName(customerName)
-                .customerEmail(customerEmail)
-                .status(Order.OrderStatus.PENDING)
-                .orderDate(LocalDateTime.now())
-                .items(new ArrayList<>())
-                .totalAmount(BigDecimal.ZERO)
-                .build();
-
+        // order 생성
+        Order order = Order.createOrder(customerName, customerEmail);
 
         BigDecimal subtotal = BigDecimal.ZERO;
+
         for (OrderProduct req : orderProducts) {
             Long pid = req.getProductId();
             int qty = req.getQuantity();
 
+            // - Repository 조회는 도메인 객체 밖에서 해결하여 의존 차단 합니다.
             Product product = productRepository.findById(pid)
                     .orElseThrow(() -> new IllegalArgumentException("Product not found: " + pid));
-            if (qty <= 0) {
-                throw new IllegalArgumentException("quantity must be positive: " + qty);
-            }
-            if (product.getStockQuantity() < qty) {
-                throw new IllegalStateException("insufficient stock for product " + pid);
-            }
 
-            OrderItem item = OrderItem.builder()
-                    .order(order)
-                    .product(product)
-                    .quantity(qty)
-                    .price(product.getPrice())
-                    .build();
-            order.getItems().add(item);
+            order.validateQuantity(qty, product.getStockQuantity(), pid);
+
+            OrderItem orderItem = OrderItem.createOrderItem(order, product, qty);
+            order.getItems().add(orderItem);
 
             product.decreaseStock(qty);
-            subtotal = subtotal.add(product.getPrice().multiply(BigDecimal.valueOf(qty)));
+
+            // 소계 : 제품가격 * 수량
+            subtotal.add(orderItem.getSubtotal());
         }
 
+        // 총 금액 : +배송료 - 할인
+        // 배송료
         BigDecimal shipping = subtotal.compareTo(new BigDecimal("100.00")) >= 0 ? BigDecimal.ZERO : new BigDecimal("5.00");
+        // 할인
         BigDecimal discount = (couponCode != null && couponCode.startsWith("SALE")) ? new BigDecimal("10.00") : BigDecimal.ZERO;
 
-        order.setTotalAmount(subtotal.add(shipping).subtract(discount));
+        order.setTotalAmount(subtotal, shipping, discount);
+
         order.setStatus(Order.OrderStatus.PROCESSING);
         return orderRepository.save(order);
     }
