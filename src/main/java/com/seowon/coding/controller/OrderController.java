@@ -1,6 +1,7 @@
 package com.seowon.coding.controller;
 
-import com.seowon.coding.domain.dto.OrderRequestDto;
+import com.seowon.coding.domain.dto.OrderRequest;
+import com.seowon.coding.domain.dto.ProductRequest;
 import com.seowon.coding.domain.model.Order;
 import com.seowon.coding.service.OrderService;
 import lombok.RequiredArgsConstructor;
@@ -8,8 +9,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.net.URI;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -68,11 +69,16 @@ public class OrderController {
      *   ]
      * }
      */
-    public ResponseEntity<Void> createOrder(@RequestBody OrderRequestDto request) {
-        orderService.placeOrder(request.getCustomerName(),
+    public ResponseEntity<Order> createOrder(@RequestBody OrderRequest request) {
+        Order order = orderService.placeOrder(request.getCustomerName(),
                 request.getCustomerEmail(),
-                request.getProductIds(),
-                request.getQuantities());
-        return ResponseEntity.created(URI.create("/api/orders")).build();
+                request.getProducts().stream()
+                        .map(ProductRequest::getProductId)
+                        .collect(Collectors.toList()),
+                request.getProducts().stream()
+                        .map(ProductRequest::getQuantity)
+                        .collect(Collectors.toList()));
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(order);
     }
 }

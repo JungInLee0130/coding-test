@@ -87,9 +87,7 @@ public class OrderService {
             product.decreaseStock(quantity);
         }
 
-        orderRepository.save(order);
-
-        return null;
+        return orderRepository.save(order);
     }
 
     /**
@@ -133,15 +131,18 @@ public class OrderService {
             subtotal.add(orderItem.getSubtotal());
         }
 
+        order.recalculateTotalAmount();
+
         // 총 금액 : +배송료 - 할인
         // 배송료
-        BigDecimal shipping = subtotal.compareTo(new BigDecimal("100.00")) >= 0 ? BigDecimal.ZERO : new BigDecimal("5.00");
+        BigDecimal shipping = order.calculateShipping(subtotal);
         // 할인
-        BigDecimal discount = (couponCode != null && couponCode.startsWith("SALE")) ? new BigDecimal("10.00") : BigDecimal.ZERO;
+        BigDecimal discount = order.calculateDiscount(couponCode);
 
         order.setTotalAmount(subtotal, shipping, discount);
 
         order.setStatus(Order.OrderStatus.PROCESSING);
+
         return orderRepository.save(order);
     }
 

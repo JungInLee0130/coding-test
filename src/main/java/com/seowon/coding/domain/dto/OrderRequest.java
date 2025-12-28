@@ -5,9 +5,8 @@ import lombok.Getter;
 import java.util.List;
 
 @Getter
-public class OrderRequestDto {
+public class OrderRequest {
     private String customerName;
     private String customerEmail;
-    private List<Long> productIds;
-    private List<Integer> quantities;
+    private List<ProductRequest> products;
 }
